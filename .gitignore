@@ -1,0 +1,13 @@
+.DS_Store
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+
+# Node
+mobile/node_modules/
+
+# Expo
+mobile/.expo/
+mobile/dist/
