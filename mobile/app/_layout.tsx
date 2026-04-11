@@ -2,11 +2,30 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/context/auth-context';
+import { AppTheme } from '@/constants/app-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const NavigationLightTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: AppTheme.colors.background,
+    card: AppTheme.colors.card,
+  },
+};
+
+const NavigationDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: AppTheme.colors.background,
+    card: AppTheme.colors.card,
+  },
+};
 
 function AppNavigator() {
   const colorScheme = useColorScheme();
@@ -37,14 +56,20 @@ function AppNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: AppTheme.colors.background,
+        }}>
         <ActivityIndicator />
       </View>
     );
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={colorScheme === 'dark' ? NavigationDarkTheme : NavigationLightTheme}>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -53,7 +78,10 @@ function AppNavigator() {
         }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="(tabs)"
+          options={{ contentStyle: { backgroundColor: AppTheme.colors.background } }}
+        />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

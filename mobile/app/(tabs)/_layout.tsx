@@ -65,12 +65,18 @@ function TabIcon({
   const anim = useRef(new Animated.Value(focused ? 1 : 0)).current;
 
   useEffect(() => {
-    Animated.spring(anim, {
-      toValue: focused ? 1 : 0,
-      friction: 8,
-      tension: 100,
-      useNativeDriver: true,
-    }).start();
+    if (focused) {
+      anim.setValue(0);
+      Animated.spring(anim, {
+        toValue: 1,
+        friction: 8,
+        tension: 100,
+        useNativeDriver: true,
+      }).start();
+      return () => anim.stopAnimation();
+    }
+    anim.stopAnimation();
+    anim.setValue(0);
   }, [focused]);
 
   if (focused) {
@@ -114,8 +120,10 @@ export default function TabLayout() {
         },
       }}>
       <Tabs.Screen name="index" />
+      <Tabs.Screen name="metrics" options={{ href: null }} />
       <Tabs.Screen name="bmi" options={{ href: null }} />
       <Tabs.Screen name="workout-session" options={{ href: null }} />
+      <Tabs.Screen name="suggested-workouts" options={{ href: null }} />
       <Tabs.Screen name="strength" options={{ href: null }} />
       <Tabs.Screen name="history" />
       <Tabs.Screen name="activity" />
@@ -129,7 +137,7 @@ const styles = StyleSheet.create({
   barOuter: {
     backgroundColor: AppTheme.colors.background,
     paddingHorizontal: 16,
-    paddingTop: 0,
+    paddingTop: 6,
   },
   bar: {
     height: 58,

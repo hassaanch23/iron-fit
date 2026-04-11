@@ -4,13 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { AppTheme } from '@/constants/app-theme';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { ScreenContainer } from '@/components/ui/screen-container';
+import { SAFE_AREA_ALL_EDGES, ScreenContainer } from '@/components/ui/screen-container';
 
 export default function OnboardingIntroScreen() {
   const router = useRouter();
 
   return (
-    <ScreenContainer>
+    <ScreenContainer edges={SAFE_AREA_ALL_EDGES}>
       <Text style={styles.title}>Build Better Fitness Habits</Text>
       <Text style={styles.subtitle}>
         See progress, get insights, and stay consistent with a routine designed for you.

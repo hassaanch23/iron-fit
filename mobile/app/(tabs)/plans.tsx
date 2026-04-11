@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import { useCallback, useMemo, useState } from 'react';
 import {
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -20,25 +21,23 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { TextInputField } from '@/components/ui/text-input-field';
 import {
   addPlansBatch,
+  completePlanItem,
   deletePlan,
   loadPlans,
   parseSetsRepsFromStrings,
   type PlanItem,
   startOfWeekMonday,
   toYMD,
-  togglePlanComplete,
+  uncompletePlanItem,
 } from '@/lib/plan-storage';
 
 type ExerciseDraft = {
   key: string;
   title: string;
-  sets: string;
-  reps: string;
-  notes: string;
 };
 
 function newDraft(): ExerciseDraft {
-  return { key: Crypto.randomUUID(), title: '', sets: '', reps: '', notes: '' };
+  return { key: Crypto.randomUUID(), title: '' };
 }
 
 function weekRangeYmd(anchor: Date): { mon: string; sun: string; days: { ymd: string; label: string; dayNum: string }[] } {
@@ -84,6 +83,11 @@ export default function PlansScreen() {
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [detailYmd, setDetailYmd] = useState<string | null>(null);
+  /** When set, day sheet shows log form for this plan id */
+  const [completeForId, setCompleteForId] = useState<string | null>(null);
+  const [logSets, setLogSets] = useState('');
+  const [logReps, setLogReps] = useState('');
+  const [logNotes, setLogNotes] = useState('');
   const [exerciseDrafts, setExerciseDrafts] = useState<ExerciseDraft[]>([newDraft()]);
   const [selectedYmd, setSelectedYmd] = useState(() => toYMD(new Date()));
 
@@ -147,22 +151,64 @@ export default function PlansScreen() {
     return days.some((x) => x.ymd === today) ? today : days[0].ymd;
   }, [days]);
 
-  const openAdd = useCallback(() => {
+  const closeDetailSheet = useCallback(() => {
+    setCompleteForId(null);
+    setLogSets('');
+    setLogReps('');
+    setLogNotes('');
     setDetailYmd(null);
+  }, []);
+
+  const openDayDetail = useCallback((ymd: string) => {
+    setCompleteForId(null);
+    setLogSets('');
+    setLogReps('');
+    setLogNotes('');
+    setDetailYmd(ymd);
+  }, []);
+
+  const openAdd = useCallback(() => {
+    closeDetailSheet();
     setSelectedYmd(pickDefaultYmd());
     setExerciseDrafts([newDraft()]);
     setAddOpen(true);
-  }, [pickDefaultYmd]);
+  }, [pickDefaultYmd, closeDetailSheet]);
 
   const openAddMoreForDay = useCallback(
     (ymd: string) => {
-      setDetailYmd(null);
+      closeDetailSheet();
       setSelectedYmd(ymd);
       setExerciseDrafts([newDraft()]);
       setAddOpen(true);
     },
-    [],
+    [closeDetailSheet],
   );
+
+  const openMarkDone = useCallback((planId: string) => {
+    setCompleteForId(planId);
+    setLogSets('');
+    setLogReps('');
+    setLogNotes('');
+  }, []);
+
+  const submitComplete = async () => {
+    if (!completeForId) return;
+    const { sets, reps } = parseSetsRepsFromStrings(logSets, logReps);
+    if (sets === null || reps === null) {
+      Alert.alert('Required', 'Enter valid sets and reps (positive whole numbers).');
+      return;
+    }
+    const next = await completePlanItem(completeForId, { sets, reps, notes: logNotes });
+    setPlans(next);
+    setCompleteForId(null);
+    setLogSets('');
+    setLogReps('');
+    setLogNotes('');
+  };
+
+  const onUncomplete = async (id: string) => {
+    setPlans(await uncompletePlanItem(id));
+  };
 
   const updateDraft = (key: string, patch: Partial<Omit<ExerciseDraft, 'key'>>) => {
     setExerciseDrafts((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -177,33 +223,24 @@ export default function PlansScreen() {
   };
 
   const submitAdd = async () => {
-    const batch = exerciseDrafts
-      .map((d) => {
-        const { sets, reps } = parseSetsRepsFromStrings(d.sets, d.reps);
-        return {
-          title: d.title.trim(),
-          sets,
-          reps,
-          notes: d.notes.trim(),
-          durationMin: null as number | null,
-        };
-      })
-      .filter((x) => x.title.length > 0);
+    const batch = exerciseDrafts.map((d) => ({ title: d.title.trim() })).filter((x) => x.title.length > 0);
     if (batch.length === 0) return;
     const next = await addPlansBatch(selectedYmd, batch);
     setPlans(next);
     setAddOpen(false);
   };
 
-  const onToggle = async (id: string) => {
-    setPlans(await togglePlanComplete(id));
-  };
-
   const onDelete = async (id: string) => {
+    if (completeForId === id) {
+      setCompleteForId(null);
+      setLogSets('');
+      setLogReps('');
+      setLogNotes('');
+    }
     const next = await deletePlan(id);
     setPlans(next);
     if (detailYmd && next.filter((p) => p.date === detailYmd).length === 0) {
-      setDetailYmd(null);
+      closeDetailSheet();
     }
   };
 
@@ -213,7 +250,7 @@ export default function PlansScreen() {
     <ScreenContainer>
       <ScreenHeader
         title="Plans"
-        subtitle="Add one or more exercises per day—tap a day to see sets, reps, and notes."
+        subtitle="Add exercise names to your week—open a day and mark each one done to log sets, reps, and optional notes."
       />
 
       <View style={styles.weekNav}>
@@ -257,7 +294,7 @@ export default function PlansScreen() {
       {weekPlans.length === 0 ? (
         <View style={styles.emptyWeek}>
           <Text style={styles.emptyWeekTitle}>Nothing scheduled this week</Text>
-          <Text style={styles.emptyWeekSub}>Use Add exercises to log sets, reps, and optional notes.</Text>
+          <Text style={styles.emptyWeekSub}>Use Add exercises to name what you will do—log sets and reps when you finish each one.</Text>
         </View>
       ) : (
         <View style={styles.daysStack}>
@@ -272,7 +309,7 @@ export default function PlansScreen() {
                 key={d.ymd}
                 style={[styles.dayBlock, d.ymd === toYMD(new Date()) && styles.dayBlockToday]}
                 activeOpacity={0.75}
-                onPress={() => setDetailYmd(d.ymd)}
+                onPress={() => openDayDetail(d.ymd)}
                 accessibilityRole="button"
                 accessibilityLabel={`View ${d.label} plans`}>
                 <View style={styles.dayBlockHead}>
@@ -310,34 +347,97 @@ export default function PlansScreen() {
         visible={detailYmd !== null}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setDetailYmd(null)}>
+        onRequestClose={() => {
+          if (completeForId) {
+            setCompleteForId(null);
+            setLogSets('');
+            setLogReps('');
+            setLogNotes('');
+          } else {
+            closeDetailSheet();
+          }
+        }}>
         <SafeAreaView style={styles.modalSafe} edges={['top', 'left', 'right']}>
           <View style={styles.modalHeader}>
-            <View style={styles.modalHeaderText}>
-              <Text style={styles.modalTitle}>{detailDayMeta?.title ?? 'Day'}</Text>
-              <Text style={styles.modalSubtitle}>{detailItems.length} exercise{detailItems.length === 1 ? '' : 's'}</Text>
+            {completeForId ? (
+              <TouchableOpacity
+                onPress={() => {
+                  setCompleteForId(null);
+                  setLogSets('');
+                  setLogReps('');
+                  setLogNotes('');
+                }}
+                hitSlop={12}
+                accessibilityLabel="Back to list"
+                style={styles.modalBackBtn}>
+                <Ionicons name="chevron-back" size={26} color={AppTheme.colors.primary} />
+              </TouchableOpacity>
+            ) : null}
+            <View style={[styles.modalHeaderText, completeForId && styles.modalHeaderTextIndented]}>
+              <Text style={styles.modalTitle}>
+                {completeForId
+                  ? (detailItems.find((x) => x.id === completeForId)?.title ?? 'Mark done')
+                  : (detailDayMeta?.title ?? 'Day')}
+              </Text>
+              <Text style={styles.modalSubtitle}>
+                {completeForId
+                  ? 'Sets and reps are required. Notes are optional.'
+                  : `${detailItems.length} exercise${detailItems.length === 1 ? '' : 's'}`}
+              </Text>
             </View>
-            <TouchableOpacity onPress={() => setDetailYmd(null)} hitSlop={12} accessibilityLabel="Close">
+            <TouchableOpacity onPress={closeDetailSheet} hitSlop={12} accessibilityLabel="Close">
               <Ionicons name="close" size={28} color={AppTheme.colors.textSecondary} />
             </TouchableOpacity>
           </View>
-          <ScrollView
-            style={styles.modalBody}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.modalBodyContent}>
-            {detailItems.map((p) => (
-              <ExerciseDetailRow key={p.id} plan={p} onToggle={() => void onToggle(p.id)} onDelete={() => void onDelete(p.id)} />
-            ))}
-            {detailYmd ? (
-              <TouchableOpacity
-                style={styles.addMoreLink}
-                onPress={() => openAddMoreForDay(detailYmd)}
-                activeOpacity={0.7}>
-                <Ionicons name="add-circle-outline" size={22} color={AppTheme.colors.primary} />
-                <Text style={styles.addMoreLinkText}>Add more exercises to this day</Text>
-              </TouchableOpacity>
-            ) : null}
-          </ScrollView>
+          {completeForId ? (
+            <ScrollView
+              style={styles.modalBody}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.modalBodyContent}>
+              <View style={styles.setsRepsRow}>
+                <View style={styles.setsRepsCol}>
+                  <TextInputField label="Sets" value={logSets} onChangeText={setLogSets} keyboardType="number-pad" />
+                </View>
+                <View style={styles.setsRepsCol}>
+                  <TextInputField label="Reps" value={logReps} onChangeText={setLogReps} keyboardType="number-pad" />
+                </View>
+              </View>
+              <Text style={styles.fieldLabel}>Notes (optional)</Text>
+              <TextInput
+                value={logNotes}
+                onChangeText={setLogNotes}
+                style={styles.notesInput}
+                placeholder="e.g. RPE 8, form cues…"
+                placeholderTextColor="#aaa"
+                multiline
+              />
+              <PrimaryButton label="Save and mark done" onPress={() => void submitComplete()} />
+            </ScrollView>
+          ) : (
+            <ScrollView
+              style={styles.modalBody}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.modalBodyContent}>
+              {detailItems.map((p) => (
+                <ExerciseDetailRow
+                  key={p.id}
+                  plan={p}
+                  onMarkDone={() => openMarkDone(p.id)}
+                  onUncomplete={() => void onUncomplete(p.id)}
+                  onDelete={() => void onDelete(p.id)}
+                />
+              ))}
+              {detailYmd ? (
+                <TouchableOpacity
+                  style={styles.addMoreLink}
+                  onPress={() => openAddMoreForDay(detailYmd)}
+                  activeOpacity={0.7}>
+                  <Ionicons name="add-circle-outline" size={22} color={AppTheme.colors.primary} />
+                  <Text style={styles.addMoreLinkText}>Add more exercises to this day</Text>
+                </TouchableOpacity>
+              ) : null}
+            </ScrollView>
+          )}
         </SafeAreaView>
       </Modal>
 
@@ -374,33 +474,6 @@ export default function PlansScreen() {
                   ) : null}
                 </View>
                 <TextInputField label="Name" value={row.title} onChangeText={(t) => updateDraft(row.key, { title: t })} />
-                <View style={styles.setsRepsRow}>
-                  <View style={styles.setsRepsCol}>
-                    <TextInputField
-                      label="Sets (optional)"
-                      value={row.sets}
-                      onChangeText={(t) => updateDraft(row.key, { sets: t })}
-                      keyboardType="number-pad"
-                    />
-                  </View>
-                  <View style={styles.setsRepsCol}>
-                    <TextInputField
-                      label="Reps (optional)"
-                      value={row.reps}
-                      onChangeText={(t) => updateDraft(row.key, { reps: t })}
-                      keyboardType="number-pad"
-                    />
-                  </View>
-                </View>
-                <Text style={styles.fieldLabel}>Notes (optional)</Text>
-                <TextInput
-                  value={row.notes}
-                  onChangeText={(t) => updateDraft(row.key, { notes: t })}
-                  style={styles.notesInput}
-                  placeholder="e.g. RPE 8, form cues…"
-                  placeholderTextColor="#aaa"
-                  multiline
-                />
               </View>
             ))}
 
@@ -409,7 +482,7 @@ export default function PlansScreen() {
               <Text style={styles.addAnotherRowText}>Add another exercise</Text>
             </TouchableOpacity>
 
-            <PrimaryButton label="Save all to plan" onPress={() => void submitAdd()} />
+            <PrimaryButton label="Add to plan" onPress={() => void submitAdd()} />
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -419,37 +492,55 @@ export default function PlansScreen() {
 
 function ExerciseDetailRow({
   plan: p,
-  onToggle,
+  onMarkDone,
+  onUncomplete,
   onDelete,
 }: {
   plan: PlanItem;
-  onToggle: () => void;
+  onMarkDone: () => void;
+  onUncomplete: () => void;
   onDelete: () => void;
 }) {
   const sr = formatSetsReps(p);
   return (
     <View style={styles.detailExerciseCard}>
       <View style={styles.planRow}>
-        <TouchableOpacity style={styles.checkHit} onPress={onToggle} accessibilityRole="checkbox" accessibilityState={{ checked: p.completed }}>
-          <View style={[styles.checkbox, p.completed && styles.checkboxOn]}>
-            {p.completed ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
-          </View>
-        </TouchableOpacity>
         <View style={styles.planBody}>
-          <Text style={[styles.planTitle, p.completed && styles.planTitleDone]}>{p.title}</Text>
-          {(() => {
-            const parts: string[] = [];
-            if (sr) parts.push(sr);
-            if (p.durationMin != null) parts.push(`${p.durationMin} min`);
-            if (parts.length === 0) return null;
-            return <Text style={styles.planMeta}>{parts.join(' · ')}</Text>;
-          })()}
-          {p.notes ? <Text style={styles.planNotes}>{p.notes}</Text> : null}
+          <View style={styles.detailTitleRow}>
+            {p.completed ? (
+              <View style={styles.doneBadge}>
+                <Ionicons name="checkmark" size={14} color="#fff" />
+              </View>
+            ) : null}
+            <Text style={[styles.planTitle, p.completed && styles.planTitleDone]}>{p.title}</Text>
+          </View>
+          {p.completed ? (
+            <>
+              {(() => {
+                const parts: string[] = [];
+                if (sr) parts.push(sr);
+                if (p.durationMin != null) parts.push(`${p.durationMin} min`);
+                if (parts.length === 0) return null;
+                return <Text style={styles.planMeta}>{parts.join(' · ')}</Text>;
+              })()}
+              {p.notes ? <Text style={styles.planNotes}>{p.notes}</Text> : null}
+              <TouchableOpacity onPress={onUncomplete} style={styles.undoLink} hitSlop={8}>
+                <Text style={styles.undoLinkText}>Undo — not done</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={styles.logHint}>When you finish, tap below to log sets and reps.</Text>
+          )}
         </View>
         <TouchableOpacity onPress={onDelete} hitSlop={10} accessibilityLabel="Remove exercise">
           <Ionicons name="trash-outline" size={20} color={AppTheme.colors.textSecondary} />
         </TouchableOpacity>
       </View>
+      {!p.completed ? (
+        <TouchableOpacity style={styles.markDoneBtn} onPress={onMarkDone} activeOpacity={0.85}>
+          <Text style={styles.markDoneBtnText}>Mark done</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -514,17 +605,29 @@ const styles = StyleSheet.create({
   dayPreview: { fontSize: 14, color: AppTheme.colors.textPrimary, fontWeight: '600', lineHeight: 20 },
   dayTapHint: { fontSize: 12, color: AppTheme.colors.textSecondary, fontStyle: 'italic' },
   planRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  checkHit: { paddingVertical: 4 },
-  checkbox: {
-    width: 26,
-    height: 26,
+  detailTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  doneBadge: {
+    width: 24,
+    height: 24,
     borderRadius: 8,
-    borderWidth: 2,
-    borderColor: AppTheme.colors.border,
+    backgroundColor: AppTheme.colors.success,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxOn: { backgroundColor: AppTheme.colors.success, borderColor: AppTheme.colors.success },
+  logHint: { fontSize: 13, color: AppTheme.colors.textSecondary, marginTop: 6, lineHeight: 18 },
+  undoLink: { alignSelf: 'flex-start', marginTop: 10 },
+  undoLinkText: { fontSize: 14, fontWeight: '700', color: AppTheme.colors.primary },
+  markDoneBtn: {
+    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: AppTheme.colors.primary,
+    backgroundColor: 'transparent',
+  },
+  markDoneBtnText: { fontSize: 15, fontWeight: '800', color: AppTheme.colors.primary },
   planBody: { flex: 1, minWidth: 0 },
   planTitle: { fontSize: 15, fontWeight: '700', color: AppTheme.colors.textPrimary },
   planTitleDone: { textDecorationLine: 'line-through', color: AppTheme.colors.textSecondary },
@@ -556,6 +659,8 @@ const styles = StyleSheet.create({
     borderBottomColor: AppTheme.colors.border,
   },
   modalHeaderText: { flex: 1, marginRight: 12 },
+  modalHeaderTextIndented: { marginLeft: 4 },
+  modalBackBtn: { marginRight: 4, paddingVertical: 4 },
   modalTitle: { fontSize: 20, fontWeight: '800', color: AppTheme.colors.textPrimary },
   modalSubtitle: { fontSize: 13, color: AppTheme.colors.textSecondary, marginTop: 4, fontWeight: '600' },
   modalBody: { flex: 1 },

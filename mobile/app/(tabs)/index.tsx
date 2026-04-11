@@ -1,179 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useMemo } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { AppTheme } from '@/constants/app-theme';
 import { ScreenContainer } from '@/components/ui/screen-container';
 import { ScreenHeader } from '@/components/ui/screen-header';
-import { useAuth } from '@/context/auth-context';
-import { api } from '@/lib/api';
-import {
-  BMI_NORMAL_MAX,
-  BMI_OVERWEIGHT_MAX,
-  BMI_UNDERWEIGHT_MAX,
-  calcBmi,
-  getBmiCategory,
-  getBmiInfo,
-} from '@/lib/bmi';
-import { getAppleHealthStepsRollingWeekTotal } from '@/lib/apple-health-steps';
-import {
-  loadWellnessSnapshot,
-  resolveHomeDashboardMetrics,
-  type UserWellnessSnapshot,
-} from '@/lib/metrics';
-import type { Dashboard, HistoryPoint } from '@/types/api';
-
-type SuggestedWorkout = {
-  title: string;
-  subtitle: string;
-  /** Strength library exercise ids—shown on Start workout with video thumbnails and full demos */
-  demoExerciseIds: string[];
-};
-
-/** Workouts matched to BMI band (same logic as getBmiInfo). */
-function workoutsForBmi(bmi: number | null): { workouts: SuggestedWorkout[]; sectionHint: string } {
-  if (bmi === null) {
-    return {
-      sectionHint: 'General picks to get you moving',
-      workouts: [
-        {
-          title: 'Brisk walk',
-          subtitle: '30 minutes of walking builds a daily habit.',
-          demoExerciseIds: ['walking-lunge', 'goblet-squat', 'plank'],
-        },
-        {
-          title: 'Light strength',
-          subtitle: 'Bodyweight moves to support posture and energy.',
-          demoExerciseIds: ['push-up', 'plank', 'goblet-squat'],
-        },
-      ],
-    };
-  }
-  if (bmi < BMI_UNDERWEIGHT_MAX) {
-    return {
-      sectionHint: 'Focused on healthy weight gain and muscle',
-      workouts: [
-        {
-          title: 'Strength training',
-          subtitle: 'Compound lifts or resistance bands to build lean mass—pair with enough protein and calories.',
-          demoExerciseIds: ['deadlift', 'back-squat', 'bench-press', 'pull-up'],
-        },
-        {
-          title: 'Low-intensity cardio',
-          subtitle: 'Short walks or easy cycling—keeps heart healthy without burning too many extra calories.',
-          demoExerciseIds: ['walking-lunge', 'hip-thrust', 'plank'],
-        },
-      ],
-    };
-  }
-  if (bmi < BMI_NORMAL_MAX) {
-    return {
-      sectionHint: 'Balanced for your healthy BMI',
-      workouts: [
-        {
-          title: 'Mixed cardio',
-          subtitle: 'Running, rowing, or dance—keep endurance up while you enjoy variety.',
-          demoExerciseIds: ['walking-lunge', 'push-up', 'romanian-deadlift'],
-        },
-        {
-          title: 'Strength maintenance',
-          subtitle: 'Two sessions a week preserves muscle and supports metabolism.',
-          demoExerciseIds: ['bench-press', 'dumbbell-row', 'goblet-squat'],
-        },
-      ],
-    };
-  }
-  if (bmi < BMI_OVERWEIGHT_MAX) {
-    return {
-      sectionHint: 'Extra cardio to support gradual fat loss',
-      workouts: [
-        {
-          title: 'Cycling or elliptical',
-          subtitle: 'Lower impact on joints while you raise weekly calorie burn steadily.',
-          demoExerciseIds: ['bulgarian-split-squat', 'romanian-deadlift', 'plank'],
-        },
-        {
-          title: 'Interval walking',
-          subtitle: 'Alternate brisk and easy pace—simple to start and easy to scale.',
-          demoExerciseIds: ['walking-lunge', 'goblet-squat', 'overhead-press'],
-        },
-      ],
-    };
-  }
-  return {
-    sectionHint: 'Low-impact, joint-friendly options',
-    workouts: [
-      {
-        title: 'Walking or aqua fitness',
-        subtitle: 'Gentle on knees and hips—aim for consistent daily movement.',
-        demoExerciseIds: ['walking-lunge', 'goblet-squat', 'plank'],
-      },
-      {
-        title: 'Seated or supported strength',
-        subtitle: 'Light resistance to maintain muscle; clear any plan with your clinician if needed.',
-        demoExerciseIds: ['lat-pulldown', 'dumbbell-row', 'push-up'],
-      },
-    ],
-  };
-}
-
-const EMPTY_WELLNESS: UserWellnessSnapshot = { waterLitersToday: null, restingHeartRateBpm: null };
+import { SuggestedWorkoutCard } from '@/components/ui/suggested-workout-card';
+import { calcBmi, getBmiCategory, getBmiInfo } from '@/lib/bmi';
+import { workoutsForBmi } from '@/lib/suggested-workouts';
+import { useDashboardMetricData } from '@/hooks/use-dashboard-metric-data';
+import { resolveHomeDashboardMetrics } from '@/lib/metrics';
+import type { HistoryPoint } from '@/types/api';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { profile } = useAuth();
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
-  const [wellness, setWellness] = useState<UserWellnessSnapshot>(EMPTY_WELLNESS);
-  const [healthStepsWeek, setHealthStepsWeek] = useState<number | null>(null);
-
-  const refreshWellness = useCallback(async () => {
-    setWellness(await loadWellnessSnapshot());
-  }, []);
-
-  const refreshHealthSteps = useCallback(async () => {
-    if (Platform.OS !== 'ios') {
-      setHealthStepsWeek(null);
-      return;
-    }
-    const n = await getAppleHealthStepsRollingWeekTotal();
-    setHealthStepsWeek(n);
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [dashRes, historyRes] = await Promise.all([
-          api.get<Dashboard>('/analytics/dashboard'),
-          api.get<{ timeframe: string; points: HistoryPoint[] }>('/analytics/history?timeframe=week'),
-        ]);
-        setDashboard(dashRes.data);
-        setHistory(historyRes.data.points);
-      } catch {
-        setDashboard({
-          total_steps_week: 0,
-          total_distance_week: 0,
-          total_calories_week: 0,
-          total_duration_week: 0,
-          workouts_week: 0,
-        });
-        setHistory([]);
-      }
-    };
-    void load();
-  }, []);
-
-  useEffect(() => {
-    void refreshWellness();
-  }, [refreshWellness]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void refreshWellness();
-      void refreshHealthSteps();
-    }, [refreshWellness, refreshHealthSteps]),
-  );
+  const { profile, dashboard, history, wellness, healthStepsWeek } = useDashboardMetricData();
 
   const homeMetrics = useMemo(
     () =>
@@ -200,21 +43,28 @@ export default function DashboardScreen() {
         subtitle="Here’s your snapshot for today."
       />
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Your metrics</Text>
-      </View>
-      <View style={styles.metricsRow}>
+      <SectionHeaderWithSeeAll
+        title="Your Metrics"
+        onSeeAll={() => router.push('/metrics')}
+        style={styles.sectionHeaderFirst}
+      />
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.metricsScroll}
+        contentContainerStyle={styles.metricsScrollContent}>
         {homeMetrics.map((m) => (
-          <MetricCard
-            key={m.id}
-            label={m.label}
-            value={m.value}
-            unit={m.unit}
-            icon={m.icon as keyof typeof Ionicons.glyphMap}
-            iconColor={m.iconColor}
-          />
+          <View key={m.id} style={styles.metricCardWrap}>
+            <MetricCard
+              label={m.label}
+              value={m.value}
+              unit={m.unit}
+              icon={m.icon as keyof typeof Ionicons.glyphMap}
+              iconColor={m.iconColor}
+            />
+          </View>
         ))}
-      </View>
+      </ScrollView>
 
       <TouchableOpacity
         style={styles.homeMenuItem}
@@ -249,11 +99,14 @@ export default function DashboardScreen() {
       </TouchableOpacity>
 
       <View style={styles.workoutSection}>
-        <Text style={styles.sectionTitle}>Suggested Workouts</Text>
+        <SectionHeaderWithSeeAll
+          title="Suggested Workouts"
+          onSeeAll={() => router.push('/suggested-workouts')}
+        />
         <Text style={styles.workoutSectionHint}>{sectionHint}</Text>
       </View>
       {suggestedWorkouts.map((w) => (
-        <WorkoutCard
+        <SuggestedWorkoutCard
           key={w.title}
           title={w.title}
           subtitle={w.subtitle}
@@ -280,6 +133,30 @@ export default function DashboardScreen() {
   );
 }
 
+function SectionHeaderWithSeeAll({
+  title,
+  onSeeAll,
+  style,
+}: {
+  title: string;
+  onSeeAll: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[styles.sectionHeaderRow, style]}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <TouchableOpacity
+        onPress={onSeeAll}
+        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+        activeOpacity={0.65}
+        accessibilityRole="button"
+        accessibilityLabel={`See all ${title}`}>
+        <Text style={styles.sectionSeeAll}>see all</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function MetricCard({
   label,
   value,
@@ -300,34 +177,11 @@ function MetricCard({
         <Ionicons name={icon} size={24} color={iconColor} />
       </View>
       <View style={styles.metricBottom}>
-        <Text style={styles.metricValue}>{value}</Text>
+        <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+          {value}
+        </Text>
         <Text style={styles.metricUnit}>{unit}</Text>
       </View>
-    </View>
-  );
-}
-
-function WorkoutCard({
-  title,
-  subtitle,
-  accentColor,
-  onStart,
-}: {
-  title: string;
-  subtitle: string;
-  accentColor: string;
-  onStart: () => void;
-}) {
-  return (
-    <View style={[styles.workoutCard, { borderLeftWidth: 4, borderLeftColor: accentColor }]}>
-      <Text style={styles.workoutTitle}>{title}</Text>
-      <Text style={styles.workoutSubtitle}>{subtitle}</Text>
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={[styles.startButton, { backgroundColor: accentColor }]}
-        onPress={onStart}>
-        <Text style={styles.startButtonText}>Start workout</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -356,13 +210,33 @@ const styles = StyleSheet.create({
   homeMenuText: { flex: 1, gap: 2 },
   homeMenuLabel: { fontSize: 17, fontWeight: '700', color: AppTheme.colors.textPrimary },
   homeMenuSub: { fontSize: 13, color: AppTheme.colors.textSecondary, lineHeight: 18 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-  workoutSection: { marginTop: 12, gap: 4 },
-  sectionTitle: { color: AppTheme.colors.textPrimary, fontSize: 26, fontWeight: '800' },
-  workoutSectionHint: { fontSize: 14, color: AppTheme.colors.textSecondary, lineHeight: 20 },
-  metricsRow: { flexDirection: 'row', gap: 10 },
-  metricCard: {
+  sectionHeaderFirst: { marginTop: 10 },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  workoutSection: { marginTop: 12, gap: 6 },
+  sectionTitle: {
     flex: 1,
+    flexShrink: 1,
+    color: AppTheme.colors.textPrimary,
+    fontSize: 26,
+    fontWeight: '800',
+  },
+  sectionSeeAll: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: AppTheme.colors.primary,
+    letterSpacing: 0.2,
+  },
+  workoutSectionHint: { fontSize: 14, color: AppTheme.colors.textSecondary, lineHeight: 20 },
+  metricsScroll: { marginHorizontal: -4, marginTop: 4 },
+  metricsScrollContent: { flexDirection: 'row', gap: 10, paddingVertical: 4, paddingRight: 12 },
+  metricCardWrap: { width: 152 },
+  metricCard: {
+    width: '100%',
     borderRadius: 18,
     padding: 14,
     backgroundColor: AppTheme.colors.card,
@@ -375,24 +249,5 @@ const styles = StyleSheet.create({
   metricLabel: { color: AppTheme.colors.textSecondary, fontSize: 14, fontWeight: '500' },
   metricValue: { color: AppTheme.colors.textPrimary, fontSize: 32, lineHeight: 36, fontWeight: '700' },
   metricUnit: { color: AppTheme.colors.textSecondary, fontSize: 14, lineHeight: 20, marginBottom: 4 },
-  workoutCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: AppTheme.colors.border,
-    padding: 20,
-    backgroundColor: AppTheme.colors.card,
-    marginTop: 10,
-  },
-  workoutTitle: { color: AppTheme.colors.textPrimary, fontSize: 28, fontWeight: '700' },
-  workoutSubtitle: { color: AppTheme.colors.textSecondary, fontSize: 15, lineHeight: 22, marginTop: 4 },
-  startButton: {
-    marginTop: 16,
-    backgroundColor: AppTheme.colors.primary,
-    borderRadius: 999,
-    alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-  },
-  startButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   helperText: { color: AppTheme.colors.textSecondary, fontSize: 13, marginTop: 4 },
 });

@@ -2,20 +2,19 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import { WebView } from 'react-native-webview';
+import { Image } from 'expo-image';
 
 import { AppTheme } from '@/constants/app-theme';
 import { ScreenContainer } from '@/components/ui/screen-container';
-import { getStrengthExerciseById } from '@/data/strength-exercises';
+import { getStrengthExerciseById, strengthExerciseThumbnail } from '@/data/strength-exercises';
+import { getNativeWebViewOrNull } from '@/lib/native-webview';
+import {
+  YOUTUBE_WEBVIEW_USER_AGENT,
+  youtubeEmbedWatchUri,
+  youtubeIframeDocument,
+} from '@/lib/youtube-embed';
 
-function youtubeEmbedUri(videoId: string): string {
-  const q = new URLSearchParams({
-    playsinline: '1',
-    modestbranding: '1',
-    rel: '0',
-  });
-  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${q.toString()}`;
-}
+const NativeWebView = getNativeWebViewOrNull();
 
 export default function StrengthDetailScreen() {
   const router = useRouter();
@@ -34,10 +33,14 @@ export default function StrengthDetailScreen() {
     );
   }
 
-  const embedUri = youtubeEmbedUri(ex.youtubeVideoId);
+  const embedUri = youtubeEmbedWatchUri(ex.youtubeVideoId);
 
   const openYoutubeExternal = () => {
     void WebBrowser.openBrowserAsync(ex.youtubeUrl);
+  };
+
+  const openEmbedBrowser = () => {
+    void WebBrowser.openBrowserAsync(embedUri);
   };
 
   return (
@@ -48,28 +51,63 @@ export default function StrengthDetailScreen() {
       </TouchableOpacity>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <View style={styles.playerShell}>
-          <WebView
-            source={{ uri: embedUri }}
-            style={styles.webview}
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction={false}
-            allowsFullscreenVideo
-            javaScriptEnabled
-            domStorageEnabled
-            startInLoadingState
-            nestedScrollEnabled
-            androidLayerType="hardware"
-            renderLoading={() => (
-              <View style={styles.webLoading}>
-                <ActivityIndicator size="large" color={AppTheme.colors.primary} />
-                <Text style={styles.webLoadingText}>Loading video…</Text>
+        {NativeWebView ? (
+          <View style={styles.playerShell}>
+            <NativeWebView
+              source={{
+                html: youtubeIframeDocument(ex.youtubeVideoId),
+                baseUrl: 'https://www.youtube.com',
+              }}
+              style={styles.webview}
+              userAgent={YOUTUBE_WEBVIEW_USER_AGENT}
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              allowsFullscreenVideo
+              javaScriptEnabled
+              domStorageEnabled
+              startInLoadingState
+              nestedScrollEnabled
+              androidLayerType="hardware"
+              setSupportMultipleWindows={false}
+              originWhitelist={['*']}
+              renderLoading={() => (
+                <View style={styles.webLoading}>
+                  <ActivityIndicator size="large" color={AppTheme.colors.primary} />
+                  <Text style={styles.webLoadingText}>Loading video…</Text>
+                </View>
+              )}
+            />
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.playerShell}
+            activeOpacity={0.92}
+            onPress={openEmbedBrowser}
+            accessibilityRole="button"
+            accessibilityLabel="Play video">
+            <Image
+              source={{ uri: strengthExerciseThumbnail(ex.youtubeVideoId) }}
+              style={styles.heroImage}
+              contentFit="cover"
+              transition={200}
+            />
+            <View style={styles.playBadge}>
+              <Ionicons name="play-circle" size={56} color="#fff" />
+            </View>
+            <View style={styles.heroOverlay}>
+              <View style={styles.ytRow}>
+                <Ionicons name="logo-youtube" size={22} color="#fff" />
+                <Text style={styles.watchOn}>Tap to play (in-app browser)</Text>
               </View>
-            )}
-          />
-        </View>
+            </View>
+          </TouchableOpacity>
+        )}
 
-        <Text style={styles.embedHint}>Plays inside the app. Use fullscreen on the player when available.</Text>
+        <Text style={styles.embedHint}>
+          {NativeWebView
+            ? 'Tap the player to start. Use the fullscreen control on the video when you want a larger view.'
+            : 'Inline player needs a dev build with react-native-webview (run npx expo run:ios). Tap the thumbnail for the in-app browser, or use the link below.'}
+        </Text>
 
         <TouchableOpacity style={styles.externalLink} onPress={openYoutubeExternal} activeOpacity={0.7}>
           <Ionicons name="open-outline" size={20} color={AppTheme.colors.primary} />
@@ -139,8 +177,26 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: '#000',
+    position: 'relative',
   },
   webview: { flex: 1, backgroundColor: '#000' },
+  heroImage: { width: '100%', height: '100%', opacity: 0.92 },
+  playBadge: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  ytRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  watchOn: { color: '#fff', fontSize: 15, fontWeight: '700' },
   webLoading: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',

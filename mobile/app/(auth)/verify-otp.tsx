@@ -5,7 +5,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { AppTheme } from '@/constants/app-theme';
 import { useAuth } from '@/context/auth-context';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { ScreenContainer } from '@/components/ui/screen-container';
+import { SAFE_AREA_ALL_EDGES, ScreenContainer } from '@/components/ui/screen-container';
 import { Toast } from '@/components/ui/toast';
 
 const CODE_LENGTH = 6;
@@ -77,7 +77,7 @@ export default function VerifyOtpScreen() {
   };
 
   return (
-    <ScreenContainer>
+    <ScreenContainer edges={SAFE_AREA_ALL_EDGES}>
       <Toast
         message={toast}
         onDismiss={() => setToast(null)}

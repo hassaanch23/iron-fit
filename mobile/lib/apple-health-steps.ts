@@ -1,19 +1,55 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 const SYNC_KEY = '@ironfit_apple_health_steps_sync_v1';
 
-type HealthKitModule = typeof import('@kayzmann/expo-healthkit');
+/** Same API we need; implemented via optional native bridge — never `require('@kayzmann/expo-healthkit')` (that file calls `requireNativeModule` and throws when the binary lacks HealthKit). */
+type HealthKitModule = {
+  isAvailable: () => boolean;
+  getSteps: (start: Date, end: Date) => Promise<number>;
+  requestAuthorization: (read: string[], write: string[]) => Promise<void>;
+};
+
+type ExpoHealthKitNative = {
+  isAvailable: () => boolean;
+  getSteps: (startSec: number, endSec: number) => Promise<number>;
+  requestAuthorization: (readTypes: string[], writeTypes: string[]) => Promise<void>;
+};
+
+function wrapExpoHealthKitNative(native: ExpoHealthKitNative): HealthKitModule {
+  return {
+    isAvailable: () => {
+      try {
+        return native.isAvailable();
+      } catch {
+        return false;
+      }
+    },
+    getSteps: (start, end) =>
+      native.getSteps(start.getTime() / 1000, end.getTime() / 1000),
+    requestAuthorization: (read, write) => native.requestAuthorization(read, write),
+  };
+}
 
 let healthKitCache: HealthKitModule | null | undefined;
 
 function getHealthKit(): HealthKitModule | null {
   if (Platform.OS !== 'ios') return null;
   if (healthKitCache !== undefined) return healthKitCache;
+
   try {
-    // Native module missing in Expo Go / web — fall back gracefully.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    healthKitCache = require('@kayzmann/expo-healthkit') as HealthKitModule;
+    const native = requireOptionalNativeModule<ExpoHealthKitNative>('ExpoHealthKit');
+    if (
+      native == null ||
+      typeof native.isAvailable !== 'function' ||
+      typeof native.getSteps !== 'function' ||
+      typeof native.requestAuthorization !== 'function'
+    ) {
+      healthKitCache = null;
+      return null;
+    }
+    healthKitCache = wrapExpoHealthKitNative(native);
   } catch {
     healthKitCache = null;
   }
@@ -21,8 +57,12 @@ function getHealthKit(): HealthKitModule | null {
 }
 
 export function isAppleHealthStepsPlatformSupported(): boolean {
-  const hk = getHealthKit();
-  return hk != null && hk.isAvailable();
+  try {
+    const hk = getHealthKit();
+    return hk != null && hk.isAvailable();
+  } catch {
+    return false;
+  }
 }
 
 export async function isAppleHealthStepsSyncEnabled(): Promise<boolean> {

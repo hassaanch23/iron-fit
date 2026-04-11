@@ -18,15 +18,27 @@ export const METRIC_ACCENT: Record<HomeMetricId, string> = {
 };
 
 /**
- * Home row: order and selection. Swap ids or reorder without touching UI components.
- * Available ids: steps_daily_avg, calories_daily_avg, distance_week_km, active_minutes_week,
- * workouts_week, water_today_l, resting_hr_bpm
+ * Home preview strip (avoid crowding small screens). Full list on Metrics screen.
  */
-export const HOME_DASHBOARD_METRIC_IDS: HomeMetricId[] = [
+export const HOME_PREVIEW_METRIC_IDS: HomeMetricId[] = [
   'steps_daily_avg',
   'calories_daily_avg',
   'water_today_l',
 ];
+
+/** Every dashboard metric id, in display order for the full Metrics screen. */
+export const ALL_DASHBOARD_METRIC_IDS: HomeMetricId[] = [
+  'steps_daily_avg',
+  'calories_daily_avg',
+  'distance_week_km',
+  'active_minutes_week',
+  'workouts_week',
+  'water_today_l',
+  'resting_hr_bpm',
+];
+
+/** @deprecated Use HOME_PREVIEW_METRIC_IDS */
+export const HOME_DASHBOARD_METRIC_IDS = HOME_PREVIEW_METRIC_IDS;
 
 function dash(): string {
   return '—';
@@ -139,6 +151,7 @@ const RESOLVERS: Record<HomeMetricId, (ctx: MetricContext, w: UserWellnessSnapsh
 export function resolveHomeDashboardMetrics(
   ctx: MetricContext,
   wellness: UserWellnessSnapshot,
+  ids: HomeMetricId[] = HOME_PREVIEW_METRIC_IDS,
 ): ResolvedHomeMetric[] {
-  return HOME_DASHBOARD_METRIC_IDS.map((id) => RESOLVERS[id](ctx, wellness));
+  return ids.map((id) => RESOLVERS[id](ctx, wellness));
 }

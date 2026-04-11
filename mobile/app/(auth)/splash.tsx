@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AppTheme } from '@/constants/app-theme';
-import { ScreenContainer } from '@/components/ui/screen-container';
+import { SAFE_AREA_ALL_EDGES, ScreenContainer } from '@/components/ui/screen-container';
 
 export default function SplashScreen() {
   useEffect(() => {
@@ -14,7 +14,7 @@ export default function SplashScreen() {
   }, []);
 
   return (
-    <ScreenContainer scroll={false}>
+    <ScreenContainer scroll={false} edges={SAFE_AREA_ALL_EDGES}>
       <View style={styles.center}>
         <View style={styles.logoBubble}>
           <Text style={styles.logoText}>IF</Text>
