@@ -65,38 +65,32 @@ function TabIcon({
   const anim = useRef(new Animated.Value(focused ? 1 : 0)).current;
 
   useEffect(() => {
-    if (focused) {
-      anim.setValue(0);
-      Animated.spring(anim, {
-        toValue: 1,
-        friction: 8,
-        tension: 100,
-        useNativeDriver: true,
-      }).start();
-      return () => anim.stopAnimation();
-    }
-    anim.stopAnimation();
-    anim.setValue(0);
+    Animated.spring(anim, {
+      toValue: focused ? 1 : 0,
+      friction: 8,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+    return () => anim.stopAnimation();
   }, [focused]);
 
-  if (focused) {
-    return (
-      <View style={styles.activePill}>
-        <Ionicons name={icon} size={20} color="#fff" />
-        <Animated.Text numberOfLines={1} style={[styles.activeLabel, { opacity: anim }]}>
-          {label}
-        </Animated.Text>
-      </View>
-    );
-  }
-
+  /** Keep Animated.Text mounted even when inactive so native opacity updates always have a listener (fixes onAnimatedValueUpdate warnings). */
   return (
-    <View style={styles.inactiveWrap}>
+    <View style={focused ? styles.activePill : styles.inactiveWrap}>
       <Ionicons
-        name={`${icon}-outline` as keyof typeof Ionicons.glyphMap}
-        size={24}
-        color="#888"
+        name={(focused ? icon : `${icon}-outline`) as keyof typeof Ionicons.glyphMap}
+        size={focused ? 20 : 24}
+        color={focused ? '#fff' : '#888'}
       />
+      <Animated.Text
+        numberOfLines={1}
+        style={[
+          styles.activeLabel,
+          { opacity: anim },
+          focused ? styles.tabLabelExpanded : styles.tabLabelCollapsed,
+        ]}>
+        {label}
+      </Animated.Text>
     </View>
   );
 }
@@ -166,16 +160,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 8,
+    maxWidth: 200,
+  },
+  inactiveWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    overflow: 'hidden',
   },
   activeLabel: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
   },
-  inactiveWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 44,
-    height: 44,
-  },
+  tabLabelExpanded: { maxWidth: 120 },
+  tabLabelCollapsed: { maxWidth: 0, overflow: 'hidden' },
 });

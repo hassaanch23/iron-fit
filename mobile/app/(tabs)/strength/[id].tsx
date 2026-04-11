@@ -8,11 +8,7 @@ import { AppTheme } from '@/constants/app-theme';
 import { ScreenContainer } from '@/components/ui/screen-container';
 import { getStrengthExerciseById, strengthExerciseThumbnail } from '@/data/strength-exercises';
 import { getNativeWebViewOrNull } from '@/lib/native-webview';
-import {
-  YOUTUBE_WEBVIEW_USER_AGENT,
-  youtubeEmbedWatchUri,
-  youtubeIframeDocument,
-} from '@/lib/youtube-embed';
+import { YOUTUBE_WEBVIEW_USER_AGENT, youtubeEmbedWatchUri } from '@/lib/youtube-embed';
 
 const NativeWebView = getNativeWebViewOrNull();
 
@@ -35,12 +31,8 @@ export default function StrengthDetailScreen() {
 
   const embedUri = youtubeEmbedWatchUri(ex.youtubeVideoId);
 
-  const openYoutubeExternal = () => {
+  const openYoutubeInBrowser = () => {
     void WebBrowser.openBrowserAsync(ex.youtubeUrl);
-  };
-
-  const openEmbedBrowser = () => {
-    void WebBrowser.openBrowserAsync(embedUri);
   };
 
   return (
@@ -54,10 +46,7 @@ export default function StrengthDetailScreen() {
         {NativeWebView ? (
           <View style={styles.playerShell}>
             <NativeWebView
-              source={{
-                html: youtubeIframeDocument(ex.youtubeVideoId),
-                baseUrl: 'https://www.youtube.com',
-              }}
+              source={{ uri: embedUri }}
               style={styles.webview}
               userAgent={YOUTUBE_WEBVIEW_USER_AGENT}
               allowsInlineMediaPlayback
@@ -82,7 +71,7 @@ export default function StrengthDetailScreen() {
           <TouchableOpacity
             style={styles.playerShell}
             activeOpacity={0.92}
-            onPress={openEmbedBrowser}
+            onPress={openYoutubeInBrowser}
             accessibilityRole="button"
             accessibilityLabel="Play video">
             <Image
@@ -103,15 +92,9 @@ export default function StrengthDetailScreen() {
           </TouchableOpacity>
         )}
 
-        <Text style={styles.embedHint}>
-          {NativeWebView
-            ? 'Tap the player to start. Use the fullscreen control on the video when you want a larger view.'
-            : 'Inline player needs a dev build with react-native-webview (run npx expo run:ios). Tap the thumbnail for the in-app browser, or use the link below.'}
-        </Text>
-
-        <TouchableOpacity style={styles.externalLink} onPress={openYoutubeExternal} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.externalLink} onPress={openYoutubeInBrowser} activeOpacity={0.7}>
           <Ionicons name="open-outline" size={20} color={AppTheme.colors.primary} />
-          <Text style={styles.externalLinkText}>Open in browser / YouTube app</Text>
+          <Text style={styles.externalLinkText}>Open in browser / YouTube</Text>
         </TouchableOpacity>
 
         <Text style={styles.title}>{ex.name}</Text>
@@ -205,12 +188,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   webLoadingText: { fontSize: 14, color: AppTheme.colors.textSecondary, fontWeight: '600' },
-  embedHint: {
-    fontSize: 12,
-    color: AppTheme.colors.textSecondary,
-    lineHeight: 17,
-    marginTop: -4,
-  },
   externalLink: {
     flexDirection: 'row',
     alignItems: 'center',
