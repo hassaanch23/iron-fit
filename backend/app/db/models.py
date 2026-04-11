@@ -17,6 +17,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     google_sub: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
+    supabase_sub: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False)

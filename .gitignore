@@ -1,5 +1,9 @@
 .DS_Store
 
+# Secrets (keep .env.example tracked)
+backend/.env
+mobile/.env
+
 # Python
 backend/.venv/
 backend/**/__pycache__/
@@ -12,3 +16,7 @@ mobile/node_modules/
 # Expo
 mobile/.expo/
 mobile/dist/
+
+# Generated native projects (recreated by npx expo prebuild)
+mobile/ios/
+mobile/android/

@@ -32,3 +32,26 @@ def decode_access_token(token: str) -> str | None:
         return str(payload.get("sub")) if payload.get("sub") else None
     except JWTError:
         return None
+
+
+def decode_supabase_jwt(token: str) -> dict[str, Any] | None:
+    """Validate Supabase-issued access JWT (HS256, project JWT secret)."""
+    if not settings.supabase_jwt_secret:
+        return None
+    try:
+        return jwt.decode(
+            token,
+            settings.supabase_jwt_secret,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+    except JWTError:
+        try:
+            return jwt.decode(
+                token,
+                settings.supabase_jwt_secret,
+                algorithms=["HS256"],
+                options={"verify_aud": False},
+            )
+        except JWTError:
+            return None

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 import { AppTheme } from '@/constants/app-theme';
 
@@ -10,15 +10,12 @@ type Props = {
 
 export function PrimaryButton({ label, onPress, secondary = false }: Props) {
   return (
-    <Pressable
+    <TouchableOpacity
+      activeOpacity={0.85}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.base,
-        secondary ? styles.secondary : styles.primary,
-        pressed && styles.pressed,
-      ]}>
+      style={[styles.base, secondary ? styles.secondary : styles.primary]}>
       <Text style={[styles.text, secondary && styles.secondaryText]}>{label}</Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -30,7 +27,6 @@ const styles = StyleSheet.create({
   },
   primary: { backgroundColor: AppTheme.colors.primary },
   secondary: { backgroundColor: AppTheme.colors.primarySoft },
-  pressed: { opacity: 0.85 },
   text: { color: '#fff', fontSize: 16, fontWeight: '600' },
   secondaryText: { color: AppTheme.colors.primary },
 });

@@ -1,35 +1,47 @@
-import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppTheme } from '@/constants/app-theme';
-import { PrimaryButton } from '@/components/ui/primary-button';
-import { ScreenContainer } from '@/components/ui/screen-container';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export default function WelcomeScreen() {
+  const router = useRouter();
+
   return (
-    <ScreenContainer scroll={false}>
-      <View style={styles.topArt}>
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.topArt} pointerEvents="none">
         <View style={styles.arc} />
         <View style={[styles.arc, styles.arc2]} />
       </View>
 
-      <View style={styles.content}>
+      <View style={styles.middle}>
         <Text style={styles.title}>Stay on Top of Your Health</Text>
         <Text style={styles.subtitle}>
           Track workouts, monitor progress, and get meaningful insights every week.
         </Text>
       </View>
 
-      <View style={styles.actions}>
-        <PrimaryButton label="Get Started" onPress={() => router.push('/(auth)/signup')} />
-        <PrimaryButton label="I already have an account" secondary onPress={() => router.push('/(auth)/login')} />
+      <View style={styles.bottom}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.cta}
+          onPress={() => router.push('/login')}>
+          <Text style={styles.ctaText}>Get Started</Text>
+        </TouchableOpacity>
       </View>
-    </ScreenContainer>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  topArt: { height: 260, justifyContent: 'center', overflow: 'hidden' },
+  safe: {
+    flex: 1,
+    backgroundColor: AppTheme.colors.background,
+    paddingHorizontal: 20,
+  },
+  topArt: { height: SCREEN_HEIGHT * 0.26, justifyContent: 'center', overflow: 'hidden' },
   arc: {
     position: 'absolute',
     width: 620,
@@ -41,8 +53,21 @@ const styles = StyleSheet.create({
     top: -120,
   },
   arc2: { top: -30 },
-  content: { flex: 1, justifyContent: 'center', gap: 10 },
+  middle: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 10,
+  },
   title: { fontSize: 38, lineHeight: 44, fontWeight: '800', color: AppTheme.colors.textPrimary },
   subtitle: { fontSize: 16, color: AppTheme.colors.textSecondary, lineHeight: 22 },
-  actions: { gap: 10 },
+  bottom: {
+    paddingBottom: 16,
+  },
+  cta: {
+    backgroundColor: AppTheme.colors.primary,
+    borderRadius: 999,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  ctaText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });

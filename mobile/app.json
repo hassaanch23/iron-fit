@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hassaanch.mobile"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +20,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.hassaanch.mobile"
     },
     "web": {
       "output": "static",
@@ -27,6 +29,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "@kayzmann/expo-healthkit",
+        {
+          "healthShareUsageDescription": "Iron Fit reads your step count from Apple Health so your totals match the Health app.",
+          "healthUpdateUsageDescription": "Iron Fit can optionally write workouts to Apple Health when you use that feature."
+        }
+      ],
       [
         "expo-splash-screen",
         {
