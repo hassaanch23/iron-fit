@@ -39,14 +39,7 @@ export function useDashboardMetricData() {
       setDashboard(dashRes.data);
       setHistory(historyRes.data.points);
     } catch {
-      setDashboard({
-        total_steps_week: 0,
-        total_distance_week: 0,
-        total_calories_week: 0,
-        total_duration_week: 0,
-        workouts_week: 0,
-      });
-      setHistory([]);
+      // keep existing data on error — don't wipe to zeros
     }
   }, [token]);
 
@@ -62,7 +55,8 @@ export function useDashboardMetricData() {
     useCallback(() => {
       void refreshWellness();
       void refreshHealthSteps();
-    }, [refreshWellness, refreshHealthSteps]),
+      void loadDashboardAndHistory();
+    }, [refreshWellness, refreshHealthSteps, loadDashboardAndHistory]),
   );
 
   return {

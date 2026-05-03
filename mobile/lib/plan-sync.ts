@@ -1,36 +1,31 @@
 import { api } from '@/lib/api';
 import { setPlanActivityId, type PlanItem, type SetLog } from '@/lib/plan-storage';
 
-/**
- * Sync a completed plan exercise to the backend as an Activity.
- * Called when the first set is logged on an exercise.
- * Returns updated plans array with activityId set, or the original if sync fails.
- */
 function elapsedMinutes(startedAt: string | null | undefined): number {
   if (!startedAt) return 1;
   const elapsed = (Date.now() - new Date(startedAt).getTime()) / 60_000;
   return Math.max(1, Math.round(elapsed));
 }
 
+/**
+ * Sync a completed plan exercise to the backend as an Activity.
+ * Throws on network/auth errors so callers can surface them to the user.
+ */
 export async function syncPlanExercise(plan: PlanItem): Promise<PlanItem[]> {
   if (plan.activityId) return setPlanActivityId(plan.id, plan.activityId);
-  try {
-    const totalReps = plan.sets.reduce((sum, s) => sum + s.reps, 0);
-    const durationEstimate = elapsedMinutes(plan.startedAt);
-    const caloriesEstimate = totalReps * 0.5;
+  const totalReps = plan.sets.reduce((sum, s) => sum + s.reps, 0);
+  const durationEstimate = elapsedMinutes(plan.startedAt);
+  const caloriesEstimate = totalReps * 0.5;
 
-    const res = await api.post<{ id: number }>('/activities', {
-      kind: `strength:${plan.muscleGroup}:${plan.title}`,
-      steps: 0,
-      distance_km: 0,
-      calories: Math.round(caloriesEstimate),
-      duration_min: durationEstimate,
-      started_at: plan.startedAt ?? `${plan.date}T${new Date().toISOString().slice(11)}`,
-    });
-    return setPlanActivityId(plan.id, res.data.id);
-  } catch {
-    return setPlanActivityId(plan.id, null);
-  }
+  const res = await api.post<{ id: number }>('/activities', {
+    kind: `strength:${plan.muscleGroup}:${plan.title}`,
+    steps: 0,
+    distance_km: 0,
+    calories: Math.round(caloriesEstimate),
+    duration_min: durationEstimate,
+    started_at: plan.startedAt ?? `${plan.date}T${new Date().toISOString().slice(11)}`,
+  });
+  return setPlanActivityId(plan.id, res.data.id);
 }
 
 /**
@@ -49,33 +44,29 @@ export async function unsyncPlanExercise(plan: PlanItem): Promise<PlanItem[]> {
 
 /**
  * Update an existing synced activity after more sets are logged.
- * Re-POSTs the activity data (delete old + create new) since there's no PUT endpoint.
+ * Throws on network/auth errors so callers can surface them to the user.
  */
 export async function resyncPlanExercise(plan: PlanItem): Promise<PlanItem[]> {
   if (plan.activityId) {
     try {
       await api.delete(`/activities/${plan.activityId}`);
     } catch {
-      // ignore
+      // ignore — activity may already be gone
     }
   }
   const totalReps = plan.sets.reduce((sum, s) => sum + s.reps, 0);
   const durationEstimate = elapsedMinutes(plan.startedAt);
   const caloriesEstimate = totalReps * 0.5;
 
-  try {
-    const res = await api.post<{ id: number }>('/activities', {
-      kind: `strength:${plan.muscleGroup}:${plan.title}`,
-      steps: 0,
-      distance_km: 0,
-      calories: Math.round(caloriesEstimate),
-      duration_min: durationEstimate,
-      started_at: plan.startedAt ?? `${plan.date}T${new Date().toISOString().slice(11)}`,
-    });
-    return setPlanActivityId(plan.id, res.data.id);
-  } catch {
-    return setPlanActivityId(plan.id, null);
-  }
+  const res = await api.post<{ id: number }>('/activities', {
+    kind: `strength:${plan.muscleGroup}:${plan.title}`,
+    steps: 0,
+    distance_km: 0,
+    calories: Math.round(caloriesEstimate),
+    duration_min: durationEstimate,
+    started_at: plan.startedAt ?? `${plan.date}T${new Date().toISOString().slice(11)}`,
+  });
+  return setPlanActivityId(plan.id, res.data.id);
 }
 
 /** Parse a strength activity kind string → { muscleGroup, exercise } */

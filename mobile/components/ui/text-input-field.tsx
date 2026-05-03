@@ -6,18 +6,20 @@ type Props = {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
+  placeholder?: string;
   secureTextEntry?: boolean;
   keyboardType?: 'default' | 'email-address' | 'numeric' | 'number-pad' | 'decimal-pad';
   error?: string | null;
 };
 
-export function TextInputField({ label, value, onChangeText, secureTextEntry, keyboardType, error }: Props) {
+export function TextInputField({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, error }: Props) {
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
+        placeholder={placeholder}
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize="none"

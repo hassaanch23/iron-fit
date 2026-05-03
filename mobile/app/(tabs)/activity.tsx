@@ -47,16 +47,16 @@ export default function ActivityScreen() {
     setWellness(await loadWellnessSnapshot());
   }, []);
 
-  const loadRecent = async () => {
+  const loadRecent = useCallback(async () => {
     try {
       const res = await api.get<Activity[]>('/activities?limit=20');
       setRecent(res.data);
     } catch {
-      setRecent([]);
+      // keep existing data on error — don't wipe the list
     }
-  };
+  }, []);
 
-  useEffect(() => { void loadRecent(); }, []);
+  useEffect(() => { void loadRecent(); }, [loadRecent]);
   useEffect(() => { void refreshWellness(); }, [refreshWellness]);
 
   const refreshAppleHealth = useCallback(async () => {
@@ -77,7 +77,7 @@ export default function ActivityScreen() {
       void refreshWellness();
       void refreshAppleHealth();
       void loadRecent();
-    }, [refreshWellness, refreshAppleHealth]),
+    }, [refreshWellness, refreshAppleHealth, loadRecent]),
   );
 
   const enableAppleHealthSync = async () => {

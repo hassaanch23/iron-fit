@@ -1,5 +1,5 @@
 import * as Crypto from 'expo-crypto';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -38,6 +38,7 @@ import {
   updateSetInExercise,
 } from '@/lib/plan-storage';
 import { resyncPlanExercise, unsyncPlanExercise } from '@/lib/plan-sync';
+import { useRouter } from 'expo-router';
 
 /* ------------------------------------------------------------------ */
 /*  Draft types for the Add modal                                      */
@@ -94,6 +95,7 @@ function uniqueGroups(items: PlanItem[]): string[] {
 
 export default function PlansScreen() {
   const router = useRouter();
+
   const [weekOffset, setWeekOffset] = useState(0);
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [addOpen, setAddOpen] = useState(false);
@@ -187,7 +189,11 @@ export default function PlansScreen() {
     setPlans(updated);
     const exercise = updated.find((p) => p.id === id);
     if (exercise) {
-      setPlans(await resyncPlanExercise(exercise));
+      try {
+        setPlans(await resyncPlanExercise(exercise));
+      } catch {
+        Alert.alert('Sync failed', 'Set saved locally but could not reach the server. Check that the backend is running.');
+      }
     }
   };
 
@@ -196,7 +202,11 @@ export default function PlansScreen() {
     setPlans(updated);
     const exercise = updated.find((p) => p.id === id);
     if (exercise) {
-      setPlans(await resyncPlanExercise(exercise));
+      try {
+        setPlans(await resyncPlanExercise(exercise));
+      } catch {
+        Alert.alert('Sync failed', 'Set saved locally but could not reach the server. Check that the backend is running.');
+      }
     }
   };
 
@@ -205,7 +215,11 @@ export default function PlansScreen() {
     setPlans(updated);
     const exercise = updated.find((p) => p.id === id);
     if (exercise && exercise.sets.length > 0) {
-      setPlans(await resyncPlanExercise(exercise));
+      try {
+        setPlans(await resyncPlanExercise(exercise));
+      } catch {
+        // not critical — local data is correct
+      }
     } else if (exercise) {
       setPlans(await unsyncPlanExercise(exercise));
     }
@@ -717,26 +731,7 @@ function ExerciseCard({
 
   const tint = muscleGroupColor(p.muscleGroup);
 
-  const [elapsed, setElapsed] = useState('');
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    if (!p.startedAt) {
-      setElapsed('');
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
-    }
-    const tick = () => {
-      const diff = Math.max(0, Math.floor((Date.now() - new Date(p.startedAt!).getTime()) / 1000));
-      const h = Math.floor(diff / 3600);
-      const m = Math.floor((diff % 3600) / 60);
-      const sec = diff % 60;
-      setElapsed(h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`);
-    };
-    tick();
-    timerRef.current = setInterval(tick, 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [p.startedAt]);
 
   return (
     <View style={s.exCard}>
@@ -776,13 +771,7 @@ function ExerciseCard({
         </TouchableOpacity>
       </View>
 
-      {/* Timer */}
-      {elapsed !== '' && (
-        <View style={s.timerRow}>
-          <Ionicons name="time-outline" size={16} color={AppTheme.colors.primary} />
-          <Text style={s.timerText}>{elapsed}</Text>
-        </View>
-      )}
+      {/* Timer removed */}
 
       {/* Logged sets */}
       {p.sets.length > 0 ? (
