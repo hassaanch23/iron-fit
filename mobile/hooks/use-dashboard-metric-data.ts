@@ -11,7 +11,7 @@ import type { Dashboard, HistoryPoint } from '@/types/api';
 const EMPTY_WELLNESS: UserWellnessSnapshot = { waterLitersToday: null, restingHeartRateBpm: null };
 
 export function useDashboardMetricData() {
-  const { profile } = useAuth();
+  const { profile, token } = useAuth();
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [wellness, setWellness] = useState<UserWellnessSnapshot>(EMPTY_WELLNESS);
@@ -30,6 +30,7 @@ export function useDashboardMetricData() {
   }, []);
 
   const loadDashboardAndHistory = useCallback(async () => {
+    if (!token) return;
     try {
       const [dashRes, historyRes] = await Promise.all([
         api.get<Dashboard>('/analytics/dashboard'),
@@ -47,7 +48,7 @@ export function useDashboardMetricData() {
       });
       setHistory([]);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     void loadDashboardAndHistory();

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppTheme } from '@/constants/app-theme';
@@ -11,6 +12,10 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { TextInputField } from '@/components/ui/text-input-field';
 import { Toast } from '@/components/ui/toast';
 import { getBmiCategory } from '@/lib/bmi';
+import { api } from '@/lib/api';
+import { parseStrengthKind } from '@/lib/plan-sync';
+import { muscleGroupColor } from '@/lib/plan-storage';
+import type { Activity, Dashboard } from '@/types/api';
 
 type WeightUnit = 'kg' | 'lbs';
 type HeightUnit = 'cm' | 'ft';
@@ -32,6 +37,8 @@ export default function ProfileScreen() {
   const [activeSheet, setActiveSheet] = useState<MenuKey>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [toastColor, setToastColor] = useState<string | undefined>(undefined);
+  const [dash, setDash] = useState<Dashboard | null>(null);
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
 
   const bmi = calcBmi(profile?.weight_kg ?? 0, profile?.height_cm ?? 0);
 
@@ -39,6 +46,30 @@ export default function ProfileScreen() {
     setToastColor(success ? '#2EBD85' : undefined);
     setToast(msg);
   };
+
+  const loadStats = useCallback(async () => {
+    try {
+      const [d, a] = await Promise.all([
+        api.get<Dashboard>('/analytics/dashboard'),
+        api.get<Activity[]>('/activities?limit=20'),
+      ]);
+      setDash(d.data);
+      setRecentActivities(a.data);
+    } catch {}
+  }, []);
+
+  useEffect(() => { void loadStats(); }, [loadStats]);
+  useFocusEffect(useCallback(() => { void loadStats(); }, [loadStats]));
+
+  const strengthCount = recentActivities.filter((a) => parseStrengthKind(a.kind)).length;
+  const topGroups = (() => {
+    const m = new Map<string, number>();
+    for (const a of recentActivities) {
+      const p = parseStrengthKind(a.kind);
+      if (p) m.set(p.muscleGroup, (m.get(p.muscleGroup) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  })();
 
   return (
     <ScreenContainer>
@@ -69,6 +100,54 @@ export default function ProfileScreen() {
           </View>
           <View style={[styles.bmiBadge, { backgroundColor: getBmiCategory(bmi).color + '20' }]}>
             <Text style={[styles.bmiBadgeText, { color: getBmiCategory(bmi).color }]}>{getBmiCategory(bmi).label}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Weekly stats */}
+      {dash && (
+        <View style={styles.weekStatsCard}>
+          <Text style={styles.weekStatsTitle}>This week</Text>
+          <View style={styles.weekStatsRow}>
+            <View style={styles.weekStatItem}>
+              <Ionicons name="barbell-outline" size={16} color="#E74C3C" />
+              <Text style={styles.weekStatVal}>{dash.workouts_week}</Text>
+              <Text style={styles.weekStatLabel}>Workouts</Text>
+            </View>
+            <View style={styles.weekStatItem}>
+              <Ionicons name="flame-outline" size={16} color="#F39C12" />
+              <Text style={styles.weekStatVal}>{Math.round(dash.total_calories_week)}</Text>
+              <Text style={styles.weekStatLabel}>Calories</Text>
+            </View>
+            <View style={styles.weekStatItem}>
+              <Ionicons name="time-outline" size={16} color="#3498DB" />
+              <Text style={styles.weekStatVal}>{dash.total_duration_week}</Text>
+              <Text style={styles.weekStatLabel}>Minutes</Text>
+            </View>
+            <View style={styles.weekStatItem}>
+              <Ionicons name="footsteps-outline" size={16} color={AppTheme.colors.primary} />
+              <Text style={styles.weekStatVal}>{(dash.total_steps_week / 1000).toFixed(1)}k</Text>
+              <Text style={styles.weekStatLabel}>Steps</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Top muscle groups */}
+      {topGroups.length > 0 && (
+        <View style={styles.mgStatsCard}>
+          <Text style={styles.weekStatsTitle}>Top muscle groups</Text>
+          <View style={styles.mgStatsGrid}>
+            {topGroups.map(([group, count]) => {
+              const tint = muscleGroupColor(group);
+              return (
+                <View key={group} style={[styles.mgStatChip, { backgroundColor: tint + '15' }]}>
+                  <View style={[styles.mgStatDot, { backgroundColor: tint }]} />
+                  <Text style={[styles.mgStatName, { color: tint }]}>{group}</Text>
+                  <Text style={styles.mgStatCount}>{count}</Text>
+                </View>
+              );
+            })}
           </View>
         </View>
       )}
@@ -346,6 +425,48 @@ const styles = StyleSheet.create({
   bmiValue: { fontSize: 30, fontWeight: '800', color: AppTheme.colors.textPrimary },
   bmiBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999 },
   bmiBadgeText: { fontSize: 14, fontWeight: '700' },
+
+  weekStatsCard: {
+    backgroundColor: AppTheme.colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: AppTheme.colors.border,
+    padding: 16,
+    gap: 12,
+  },
+  weekStatsTitle: { fontSize: 16, fontWeight: '800', color: AppTheme.colors.textPrimary },
+  weekStatsRow: { flexDirection: 'row', gap: 8 },
+  weekStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: AppTheme.colors.background,
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  weekStatVal: { fontSize: 16, fontWeight: '800', color: AppTheme.colors.textPrimary },
+  weekStatLabel: { fontSize: 10, fontWeight: '600', color: AppTheme.colors.textSecondary },
+
+  mgStatsCard: {
+    backgroundColor: AppTheme.colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: AppTheme.colors.border,
+    padding: 16,
+    gap: 10,
+  },
+  mgStatsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  mgStatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  mgStatDot: { width: 8, height: 8, borderRadius: 4 },
+  mgStatName: { fontSize: 13, fontWeight: '700' },
+  mgStatCount: { fontSize: 13, fontWeight: '800', color: AppTheme.colors.textPrimary },
 
   menuCard: {
     backgroundColor: AppTheme.colors.card,

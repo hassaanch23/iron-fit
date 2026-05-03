@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,6 +23,11 @@ app.include_router(api_router, prefix=settings.api_prefix)
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    if not settings.supabase_jwt_secret:
+        logging.getLogger("uvicorn.error").warning(
+            "SUPABASE_JWT_SECRET is unset — the API cannot verify Supabase access tokens from the mobile app "
+            "(GET /profile etc. will return 401). Add it to backend/.env from Supabase → Project Settings → API → JWT Secret."
+        )
 
 
 @app.get("/health")

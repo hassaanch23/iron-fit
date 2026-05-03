@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     # Supabase → Project Settings → API → JWT Secret (verifies mobile access_token)
     supabase_jwt_secret: str | None = None
+    # JWKS URL for ES256 token verification (auto-derived if supabase_url is set)
+    supabase_jwks_url: str | None = None
+    supabase_url: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
